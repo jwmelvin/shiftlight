@@ -12,7 +12,7 @@
 #include <Encoder.h>
 #include <Bounce.h>
 #include <EEPROM.h>
-#include <EEPROMAnything.h>
+// #include <EEPROMAnything.h>
 
 // serial functionality
 #define SERIALDEBUG_MASTER 0 // master switch (requires one below too)
