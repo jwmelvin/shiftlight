@@ -30,10 +30,12 @@ User Interface (implemented with a pushbutton encoder):
   - holding button enters ADJUST mode
   - turning knob adjusts which of the five sets of parameters is active
     - pressing button during the color display saves the current parameter set
+  - tapping button saves current parameter set
   - waiting for timeout retains but does not save the parameters
 
 - in ADJUST mode:
   - holding button saves parameters and returns to RUN mode
+  - turning knob adjusts the current parameter (color, rpm, wipe mode, or brake light)
   - tapping button moves to the next parameter (and will cycle back)
     - first is the color for a segment, shown when exceeding the rpm for the segment
     - next is the rpm for the segment, displaying in two 4-bit digits representing the thousands (red) and hundreds (blue) places, so 7800 rpm is displayed as these lights: (0111 1000)
