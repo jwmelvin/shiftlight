@@ -9,7 +9,7 @@
 // * save states to EEPROM
 // ** VERSION 2 **//
 // * allow for adjustment of the config variables
-// * 1k and 100 digit representation with 4-bit binary
+// * 1k and 100 digit representation with 4-bit binary (binary coded decimal)
 
 #include <Adafruit_NeoPixel.h>
 #include <Encoder.h>
@@ -24,10 +24,10 @@
 
 #define milBlinkIntervalLEDs 50 // ms interval for blinking LEDs at redline
 #define milBlinkIntervalBrake 250 // ms interval for blinking brakes at redline
-#define milBlinkIntervalAdj 1000 // ms interval for adjustment blinking
-#define numAVG 4 // number of tach interrupts to accumulate
+#define milBlinkIntervalAdj 500 // ms interval for adjustment blinking
+#define numAVG 2 // number of tach interrupts to accumulate
 #define milTIMEOUT_DELAY 10000 // exit setting mode if not adjusted for this long (ms)
-#define milBUTTON_HOLD 1000 // how long you must hold the button to get into setting mode
+#define milBUTTON_HOLD 700 // how long you must hold the button to get into setting mode
 #define OFFSET_EEPROM 0 // memory start address
 #define CONFIG_START 16 //memory address for config
 #define encCHUNK 4 // decrease the sensitivity of the encoder
@@ -42,7 +42,7 @@
 	uint8_t iConfig = 0;
 	
 // config parameters saved to EEPROM
-	#define CONFIG_VERSION "s02" // version number 
+	#define CONFIG_VERSION "s03" // version number 
 						//***** (make sure to increment when changing structure)
 	#define numCONFIGS 5
 
@@ -57,18 +57,18 @@
 	configStruct configurationDefault = { //define defaults
 		CONFIG_VERSION,
 		{
-			{ 5800, 7000, 7800, 8000}, 
-			{ 5800, 7000, 7800, 8000}, 
-			{ 5800, 7000, 7800, 8000}, 
-			{ 5800, 7000, 7800, 8000}, 
-			{ 1000, 1000, 7000, 7800}
+			{ 5500,	7800,	8000,	8100}, 
+			{ 5500,	7800,	8000,	8100}, 
+			{ 5500,	7500,	8000,	8100}, 
+			{ 5500, 	7500,	8000,	8100}, 
+			{ 1500, 	2000,	3000,	4000}
 		},
 		{
-			{  0 ,  	85, 	170, 	170	},
-			{  0 ,  	85,   170, 	170	},
-			{  0 , 	0,		100,	170	},
-			{  0 , 	0 , 	100,	170	},
-			{  0 ,  	0,   	170, 	85		}
+			{  85 , 	0,		85,		170	},
+			{  85 ,  	85,  	170, 	170	},
+			{  85 , 	0 , 		85,		170	},
+			{  85 ,  	85, 		170, 	170	},
+			{  85 ,  	0, 		85, 		170	}
 		},
 		{ WIPE , SOLID , WIPE , SOLID , WIPE },
 		{ BRAKE , BRAKE , BRAKE , BRAKE , NONE }
@@ -77,13 +77,13 @@
   
 	// dot // bar // wipe // flash // wipe mode // "brake" during wipe
 	/* 
-	colors:	0     =	green;
-				85   =	red;
-				170 =	blue;
+	color:	0     =	green;
+					85   =	red;
+					170 =	blue;
 	
 	wipe mode:	0 = solid; 
-					1 = growing; 
-					2 = wipe (from bar>wipe)
+								1 = growing; 
+								2 = wipe (from bar>wipe)
 	*/
 
 	/*  // place holder for a possible matrix to scale brightness of individual segments
@@ -126,8 +126,8 @@
 #define pinTACH 6 // just for info; defined in interrupt setup below
 #define pinBRAKELIGHT 12
 #define pinBUTTON 3
-#define pinENC_A 8
-#define pinENC_B 7
+#define pinENC_A 7
+#define pinENC_B 8
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(numLEDs, pinLED_DATA, NEO_GRB + NEO_KHZ800);
 // Parameter 1 = number of pixels in strip
@@ -198,10 +198,9 @@ void loop() {
 	inputSerial();  // read serial input if enabled and available
 	inputButton();  // check for button presses
 	inputEncoder(); // check for encoder motion
-	//if (!modeSet) updateDisplay();  // update display based on processed tachometer reading
 	checkTimeout();
 	updateDisplay(); // update display 
-	delay(10);  //wait a while // why?
+	delay(5);  //wait a while // why?
 }
 
 
@@ -290,9 +289,10 @@ void processTach() {
 	}
 	
 	if ( micTachInterval ){ // avoid divide by 0
-		// this is based on an Acura NSX, adjust for other engines
-		rpmInst = 20000000UL / micTachInterval * (uint32_t)numAVG; 
-		rpmAvg = ( rpmAvg * 2UL + rpmInst ) / 3UL; // rolling average rpm
+		rpmInst = 30000000UL / micTachInterval * (uint32_t)numAVG; 
+			// Acura NSX (6 cyl), 20000000UL
+			// Honda Civic (4 cyl), 30000000UL
+		rpmAvg = ( rpmAvg * 2UL + rpmInst ) / 3UL; // smoothing function for rpm
 		if(SERIALDEBUG_MASTER && SERIALDEBUG_LIVE) { 
 			Serial.print("micTachInterval: "); Serial.print(micTachInterval);
 			Serial.print("  rpmInst: "); Serial.print(rpmInst);
@@ -324,15 +324,14 @@ void inputEncoder() {
 		encOld = encNew;
 		milTimeout = millis();
 		// if (SERIALDEBUG_MASTER && SERIALDEBUG_SLOW) { Serial.print("encChange="); Serial.println(encChange); }
+		
 		// if in setting mode, change the index of the configuration matrix
 		if (mode == SET) {
 			encChange /= encCHUNK; // use chunks to ensure fine control (move by a single index)
-			if ( encChange > 0) { // increased
-				iConfig = constrain( iConfig+1, 0, numCONFIGS - 1 );
-			}
-			else { // decreased
-				iConfig = constrain( iConfig-1, 0, numCONFIGS - 1 );
-			}
+			colorBar(0,numLEDs); // blink all pixels to indicate change of setting index
+			strip.show();
+			delay(75);
+			iConfig = constrain( iConfig+encChange, 0, numCONFIGS - 1 );
 			if (SERIALDEBUG_MASTER && SERIALDEBUG_SLOW) { Serial.print("iConfig="); Serial.println(iConfig); }
 		}
 		// adjust RPM
@@ -445,14 +444,14 @@ void inputButton(){
 			mode = RUN;
 		}
 		else if (mode == ADJ){
-			if (parmAdj == COLOR) {
-				if (iConfigAdj < 4) parmAdj = RPM;
-				else {
+			if (parmAdj == COLOR) { // if adjusting color 
+				if (iConfigAdj < 4) parmAdj = RPM; // switch to RPM if there is a next setpoint
+				else { // if done with setpoints then go to wipe mode and brake mode
 					iConfigAdj++;
-					if (iConfigAdj > 5) iConfigAdj = 0;
+					if (iConfigAdj > 5) iConfigAdj = 0; // return to color of first setpoint
 				}
 			}
-			else if (parmAdj == RPM){
+			else if (parmAdj == RPM){ // if adjusting RPM, switch to next color
 				iConfigAdj++;
 				parmAdj = COLOR;
 			}
@@ -515,12 +514,12 @@ void showColors() {
 }
 
 void showConfigColor(){
-	// first paint the colors
-	colorBarPart(Wheel(config.colors[iConfig][0] ), 0, 1);
-	colorBarPart(Wheel(config.colors[iConfig][1] ), 1, numLEDs - 5);
-	colorBarPart(Wheel(config.colors[iConfig][2] ), numLEDs - 4, 2);
-	colorBarPart(Wheel(config.colors[iConfig][3] ), numLEDs - 2, 2);
-	// flash color for iConfigAdj
+	if  (iConfigAdj) < 4  // for the individual setpoints, paint whole bar with one color (to show current color setting)
+		colorBar(Wheel(config.colors[iConfig][iConfigAdj]), numLEDs);
+	else  // for wipe mode and switched output, show the combo of colors
+		showColors();
+	
+	// flash pixel(s) for iConfigAdj (to show which segment is being adjusted)
 	switch (iConfigAdj){
 		case 0:
 			colorBarPart(blinkStateAdj ? Wheel(config.colors[iConfig][0]) : 0, 0, 1);			
@@ -553,7 +552,7 @@ void showConfigColor(){
 			}
 			break;
 		case 5:
-			// brake while wipe
+			// switched output while wipe
 			colorBarPart(blinkStateAdj ? Wheel(config.colors[iConfig][2]) : 0, numLEDs - 4, 2);
 			digitalWrite(pinBRAKELIGHT,  config.brake[iConfig] ? HIGH : LOW); 
 			break;
