@@ -328,9 +328,11 @@ void inputEncoder() {
 		// if in setting mode, change the index of the configuration matrix
 		if (mode == SET) {
 			encChange /= encCHUNK; // use chunks to ensure fine control (move by a single index)
-			colorBar(0,numLEDs); // blink all pixels to indicate change of setting index
-			strip.show();
-			delay(75);
+			if ( (encChange>0 && iConfig < numCONFIGS-1) || (encChange<0 && iConfig>0) ){
+				colorBar(0,numLEDs); // blink all pixels to indicate change of setting index
+				strip.show();
+				delay(75);
+			}
 			iConfig = constrain( iConfig+encChange, 0, numCONFIGS - 1 );
 			if (SERIALDEBUG_MASTER && SERIALDEBUG_SLOW) { Serial.print("iConfig="); Serial.println(iConfig); }
 		}
@@ -514,7 +516,7 @@ void showColors() {
 }
 
 void showConfigColor(){
-	if  (iConfigAdj) < 4  // for the individual setpoints, paint whole bar with one color (to show current color setting)
+	if  (iConfigAdj < 4)  // for the individual setpoints, paint whole bar with one color (to show current color setting)
 		colorBar(Wheel(config.colors[iConfig][iConfigAdj]), numLEDs);
 	else  // for wipe mode and switched output, show the combo of colors
 		showColors();
